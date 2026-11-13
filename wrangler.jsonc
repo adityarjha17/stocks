@@ -1,0 +1,22 @@
+{
+  // One Worker serves the page (public/) and the /api/* routes (src/index.js)
+  "name": "stocks",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+
+  // Shared watchlist store. Create a KV namespace in the Cloudflare dashboard
+  // (Storage & Databases > KV > Create, name it "stocks-watchlist") and paste its ID here.
+  "kv_namespaces": [{ "binding": "STORE", "id": "PASTE_KV_NAMESPACE_ID_HERE" }],
+
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // Live address. Cloudflare creates the DNS record and certificate on deploy.
+  "routes": [{ "pattern": "stocks.adityarjha.com", "custom_domain": true }],
+
+  // Turn off the free *.workers.dev address: caching does not work there,
+  // so every visit would use up IndianAPI calls.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "observability": { "enabled": false }
+}

@@ -15,6 +15,11 @@ const SUFFIX = { NSE: ".NS", BSE: ".BO", IDX: "" };
 const RANGES = { "1M": ["1mo", "1d"], "6M": ["6mo", "1d"], "1Y": ["1y", "1d"], "5Y": ["5y", "1wk"] };
 const TTL_PRICE = 30 * 60;          // 30 min: price, chart, news
 const TTL_FUND = 12 * 60 * 60;      // 12 h: fundamentals (saves the monthly quota)
+const TTL_FAIL = 5 * 60;            // 5 min: remember a failed headline fetch, so a dead
+                                    // source is not retried on every single request
+const GNEWS_DOWN = "gnews-down/v1"; // set when Google News refuses us; skips it for 15 min
+const T_FETCH = 8000;               // ms: upstream budget, so one slow source cannot hang a reply
+const T_NEWS = 4000;                // ms: headlines are secondary, so they get less
 
 export default {
   async fetch(request, env, ctx) {
@@ -54,7 +59,7 @@ async function stockRoute(url, env, ctx) {
     fundamentals.primaryError = why;
   }
   const name = qName || (fundamentals.ok && fundamentals.data.companyName) || s;
-  const news = await settle(cached(`n/${s}`, TTL_PRICE, ctx, () => googleNews(name)));
+  const news = await settle(cached(`n/${s}`, TTL_PRICE, ctx, () => headlines(name, false, ctx), TTL_FAIL));
   return { symbol: s, exchange: ex, fetchedAt: new Date().toISOString(), quote, fundamentals, news };
 }
 
@@ -63,7 +68,7 @@ async function indexRoute(url, ctx) {
   const r = RANGES[url.searchParams.get("range")] ? url.searchParams.get("range") : "1Y";
   const quote = await settle(cached(`idx/NSEI/${r}`, TTL_PRICE, ctx, () => yahoo("^NSEI", "IDX", r)));
   if (url.searchParams.get("news") !== "1") return { quote };
-  const news = await settle(cached("n/market", TTL_PRICE, ctx, () => googleNews("Nifty Sensex stock market today", true)));
+  const news = await settle(cached("n/market", TTL_PRICE, ctx, () => headlines("Nifty Sensex stock market today", true, ctx), TTL_FAIL));
   return { fetchedAt: new Date().toISOString(), quote, news };
 }
 
@@ -118,7 +123,7 @@ async function watchlistRoute(request, env) {
 // NSE publishes this as a public download. We fetch it at most once every 30 days.
 function symbolsRoute(ctx) {
   return settle(cached("nse-list/v1", 30 * 24 * 3600, ctx, async () => {
-    const res = await fetch("https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv", { headers: { "User-Agent": UA, Accept: "text/csv,*/*" } });
+    const res = await fetchT("https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv", { headers: { "User-Agent": UA, Accept: "text/csv,*/*" } }, 15000);
     if (!res.ok) throw new Error(`NSE list HTTP ${res.status}`);
     const rows = (await res.text()).split(/\r?\n/).slice(1);
     const data = [];
@@ -138,7 +143,7 @@ async function yahooSearch(q, ctx) {
   const hit = await cacheGet(key);
   if (hit) return { ok: true, ...hit, cached: true };
   const out = await settle((async () => {
-    const res = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=12&newsCount=0&region=IN`, { headers: { "User-Agent": UA, Accept: "application/json" } });
+    const res = await fetchT(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=12&newsCount=0&region=IN`, { headers: { "User-Agent": UA, Accept: "application/json" } });
     if (!res.ok) throw new Error(`Yahoo search HTTP ${res.status}`);
     const j = await res.json();
     const map = new Map();
@@ -170,7 +175,7 @@ async function rawRoute(url, env) {
 async function yahoo(symbol, ex, range) {
   const [r, interval] = RANGES[range];
   const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol + SUFFIX[ex])}?range=${r}&interval=${interval}`;
-  const res = await fetch(u, { headers: { "User-Agent": UA, Accept: "application/json" } });
+  const res = await fetchT(u, { headers: { "User-Agent": UA, Accept: "application/json" } });
   if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
   const j = await res.json();
   const r0 = j?.chart?.result?.[0];
@@ -206,7 +211,7 @@ async function yahoo(symbol, ex, range) {
 async function indianApiRaw(symbol, env) {
   const key = (env.INDIANAPI_KEY || "").trim();
   if (!key || key.startsWith("PASTE")) throw new Error("IndianAPI key missing: add INDIANAPI_KEY to .dev.vars");
-  const res = await fetch(`${INDIANAPI}/stock?name=${encodeURIComponent(symbol)}`, {
+  const res = await fetchT(`${INDIANAPI}/stock?name=${encodeURIComponent(symbol)}`, {
     headers: { "x-api-key": key, Accept: "application/json" },
   });
   const text = await res.text();
@@ -239,11 +244,11 @@ async function indianApiStock(symbol, nameHint, env) {
 let yAuth = null;
 async function yahooAuth(force) {
   if (!force && yAuth && Date.now() - yAuth.t < 3600e3) return yAuth;
-  const r = await fetch("https://fc.yahoo.com/", { headers: { "User-Agent": UA }, redirect: "manual" });
+  const r = await fetchT("https://fc.yahoo.com/", { headers: { "User-Agent": UA }, redirect: "manual" });
   const list = typeof r.headers.getSetCookie === "function" ? r.headers.getSetCookie() : [];
   const cookie = list.map(c => c.split(";")[0]).join("; ");
   if (!cookie) throw new Error("Yahoo gave no session cookie");
-  const c = await fetch("https://query2.finance.yahoo.com/v1/test/getcrumb", { headers: { "User-Agent": UA, Cookie: cookie } });
+  const c = await fetchT("https://query2.finance.yahoo.com/v1/test/getcrumb", { headers: { "User-Agent": UA, Cookie: cookie } });
   const crumb = (await c.text()).trim();
   if (!c.ok || !crumb || crumb.length > 40 || /[<{ ]/.test(crumb)) throw new Error(`Yahoo crumb failed (HTTP ${c.status})`);
   yAuth = { cookie, crumb, t: Date.now() };
@@ -255,7 +260,7 @@ async function yahooFundamentals(symbol, ex) {
   let j, res;
   for (let attempt = 0; attempt < 2; attempt++) {
     const a = await yahooAuth(attempt > 0);
-    res = await fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol + SUFFIX[ex])}?modules=${mods}&crumb=${encodeURIComponent(a.crumb)}`,
+    res = await fetchT(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol + SUFFIX[ex])}?modules=${mods}&crumb=${encodeURIComponent(a.crumb)}`,
       { headers: { "User-Agent": UA, Cookie: a.cookie, Accept: "application/json" } });
     if (res.status !== 401) break;
   }
@@ -332,11 +337,26 @@ function summarize(d, symbol) {
   };
 }
 
-// ---------- Google News RSS ----------
+// ---------- Headlines ----------
+// Google News RSS is the better source, but it answers 503 to some data-centre
+// addresses, including the ones this Worker goes out on. When that happens we note it
+// for 15 minutes and serve Yahoo's headlines instead, rather than paying Google's
+// timeout on every request.
+async function headlines(name, asIs, ctx) {
+  if (!(await cacheGet(GNEWS_DOWN))) {
+    try {
+      return await googleNews(name, asIs);
+    } catch (e) {
+      ctx.waitUntil(cachePut(GNEWS_DOWN, 15 * 60, { why: String(e.message || e) }));
+    }
+  }
+  return yahooNews(name, asIs);
+}
+
 async function googleNews(companyName, asIs) {
   const clean = companyName.replace(/\b(limited|ltd\.?)\b/gi, "").replace(/\s+/g, " ").trim();
   const q = encodeURIComponent(asIs ? companyName : `"${clean}" share`);
-  const res = await fetch(`https://news.google.com/rss/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`, { headers: { "User-Agent": UA } });
+  const res = await fetchT(`https://news.google.com/rss/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`, { headers: { "User-Agent": UA } }, T_NEWS);
   if (!res.ok) throw new Error(`Google News HTTP ${res.status}`);
   const xml = await res.text();
   const items = [];
@@ -358,11 +378,39 @@ async function googleNews(companyName, asIs) {
   return { data: { query: clean, items: list } };
 }
 
+// Same shape as googleNews, from the search endpoint the fallback search already uses.
+async function yahooNews(companyName, asIs) {
+  const clean = companyName.replace(/\b(limited|ltd\.?)\b/gi, "").replace(/\s+/g, " ").trim();
+  const q = asIs ? "Nifty 50 India stock market" : clean;
+  const res = await fetchT(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=0&newsCount=12&region=IN`,
+    { headers: { "User-Agent": UA, Accept: "application/json" } }, T_NEWS);
+  if (!res.ok) throw new Error(`Yahoo news HTTP ${res.status}`);
+  const j = await res.json();
+  const items = (j.news || [])
+    .map(n => ({
+      title: String(n.title || "").trim(),
+      link: n.link || "",
+      date: n.providerPublishTime ? new Date(n.providerPublishTime * 1000).toUTCString() : "",
+      source: n.publisher || "",
+    }))
+    .filter(i => i.title && i.link)
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    .slice(0, 10);
+  if (!items.length) throw new Error("no headlines for this company");
+  return { data: { query: clean, items } };
+}
+
 function decodeXml(s) {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 }
 
 // ---------- helpers ----------
+// Every outbound call gets a deadline. Without one, a source that stalls (or answers
+// slowly before refusing) holds the whole reply open for as long as it likes.
+function fetchT(url, opts = {}, ms = T_FETCH) {
+  return fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
+}
+
 async function cacheGet(key) {
   const hit = await caches.default.match(new Request("https://cache.stocks.local/" + encodeURIComponent(key)));
   return hit ? hit.json() : null;
@@ -373,13 +421,26 @@ function cachePut(key, ttl, value) {
   return caches.default.put(req, new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` } }));
 }
 
-// Cache only successful answers, so a failure never sticks.
-async function cached(key, ttl, ctx, loader) {
+// Cache successful answers. A failure sticks only when the caller asks for it with
+// failTtl, and then only briefly: long enough to stop one dead source from costing
+// every visitor a wait, short enough that the source is picked up again when it returns.
+async function cached(key, ttl, ctx, loader, failTtl = 0) {
   const cache = caches.default;
   const req = new Request("https://cache.stocks.local/" + encodeURIComponent(key));
   const hit = await cache.match(req);
-  if (hit) return { ...(await hit.json()), cached: true };
-  const value = await loader();
+  if (hit) {
+    const v = await hit.json();
+    if (v && v.__fail) throw new Error(v.error);
+    return { ...v, cached: true };
+  }
+  let value;
+  try {
+    value = await loader();
+  } catch (e) {
+    const msg = String(e.message || e);
+    if (failTtl) ctx.waitUntil(cachePut(key, failTtl, { __fail: true, error: msg }));
+    throw e;
+  }
   const res = new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` } });
   ctx.waitUntil(cache.put(req, res));
   return value;

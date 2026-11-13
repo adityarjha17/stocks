@@ -59,7 +59,7 @@ async function stockRoute(url, env, ctx) {
     fundamentals.primaryError = why;
   }
   const name = qName || (fundamentals.ok && fundamentals.data.companyName) || s;
-  const news = await settle(cached(`n/${s}`, TTL_PRICE, ctx, () => headlines(name, false, ctx), TTL_FAIL));
+  const news = await settle(cached(`n/${s}`, TTL_PRICE, ctx, () => headlines(ctx, { name, symbol: s, ex }), TTL_FAIL));
   return { symbol: s, exchange: ex, fetchedAt: new Date().toISOString(), quote, fundamentals, news };
 }
 
@@ -68,7 +68,8 @@ async function indexRoute(url, ctx) {
   const r = RANGES[url.searchParams.get("range")] ? url.searchParams.get("range") : "1Y";
   const quote = await settle(cached(`idx/NSEI/${r}`, TTL_PRICE, ctx, () => yahoo("^NSEI", "IDX", r)));
   if (url.searchParams.get("news") !== "1") return { quote };
-  const news = await settle(cached("n/market", TTL_PRICE, ctx, () => headlines("Nifty Sensex stock market today", true, ctx), TTL_FAIL));
+  const news = await settle(cached("n/market", TTL_PRICE, ctx, () =>
+    headlines(ctx, { name: "Nifty Sensex stock market today", symbol: "^NSEI", ex: "IDX", asIs: true }), TTL_FAIL));
   return { fetchedAt: new Date().toISOString(), quote, news };
 }
 
@@ -342,7 +343,7 @@ function summarize(d, symbol) {
 // addresses, including the ones this Worker goes out on. When that happens we note it
 // for 15 minutes and serve Yahoo's headlines instead, rather than paying Google's
 // timeout on every request.
-async function headlines(name, asIs, ctx) {
+async function headlines(ctx, { name, symbol, ex, asIs }) {
   if (!(await cacheGet(GNEWS_DOWN))) {
     try {
       return await googleNews(name, asIs);
@@ -350,54 +351,58 @@ async function headlines(name, asIs, ctx) {
       ctx.waitUntil(cachePut(GNEWS_DOWN, 15 * 60, { why: String(e.message || e) }));
     }
   }
-  return yahooNews(name, asIs);
+  return yahooNews(name, symbol, ex);
 }
 
 async function googleNews(companyName, asIs) {
-  const clean = companyName.replace(/\b(limited|ltd\.?)\b/gi, "").replace(/\s+/g, " ").trim();
+  const clean = cleanName(companyName);
   const q = encodeURIComponent(asIs ? companyName : `"${clean}" share`);
   const res = await fetchT(`https://news.google.com/rss/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`, { headers: { "User-Agent": UA } }, T_NEWS);
   if (!res.ok) throw new Error(`Google News HTTP ${res.status}`);
-  const xml = await res.text();
+  return { data: { query: clean, items: parseRss(await res.text(), 60) } };
+}
+
+// Yahoo's per-ticker feed, also RSS. It is thinner than Google for Indian names, so it
+// looks back further: a headline from two months ago, shown with its date, still beats
+// an empty panel.
+async function yahooNews(companyName, symbol, ex) {
+  const s = symbol + SUFFIX[ex];
+  const res = await fetchT(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(s)}&region=IN&lang=en-IN`,
+    { headers: { "User-Agent": UA, Accept: "application/rss+xml,text/xml,*/*" } }, T_NEWS);
+  if (!res.ok) throw new Error(`Yahoo news HTTP ${res.status}`);
+  const items = parseRss(await res.text(), 180);
+  if (!items.length) throw new Error("no headlines for " + s);
+  return { data: { query: cleanName(companyName), items } };
+}
+
+function cleanName(s) {
+  return String(s).replace(/\b(limited|ltd\.?)\b/gi, "").replace(/\s+/g, " ").trim();
+}
+
+// Both feeds are RSS 2.0, so one reader serves both.
+function parseRss(xml, maxAgeDays) {
   const items = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
     const get = tag => {
       const r = m[1].match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
       return r ? decodeXml(r[1].replace(/^<!\[CDATA\[|\]\]>$/g, "")).trim() : "";
     };
-    const source = get("source");
+    const link = get("link");
+    let source = get("source");          // Google names the outlet; Yahoo does not
     let title = get("title");
     if (source && title.endsWith(" - " + source)) title = title.slice(0, -(source.length + 3));
-    items.push({ title, link: get("link"), date: get("pubDate"), source });
+    if (!source && link) source = hostOf(link);
+    items.push({ title, link, date: get("pubDate"), source });
   }
-  const cutoff = Date.now() - 60 * 24 * 3600 * 1000;   // last 60 days
-  const list = items
+  const cutoff = Date.now() - maxAgeDays * 24 * 3600 * 1000;
+  return items
     .filter(i => i.title && i.link && Date.parse(i.date) > cutoff)
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
     .slice(0, 10);
-  return { data: { query: clean, items: list } };
 }
 
-// Same shape as googleNews, from the search endpoint the fallback search already uses.
-async function yahooNews(companyName, asIs) {
-  const clean = companyName.replace(/\b(limited|ltd\.?)\b/gi, "").replace(/\s+/g, " ").trim();
-  const q = asIs ? "Nifty 50 India stock market" : clean;
-  const res = await fetchT(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=0&newsCount=12&region=IN`,
-    { headers: { "User-Agent": UA, Accept: "application/json" } }, T_NEWS);
-  if (!res.ok) throw new Error(`Yahoo news HTTP ${res.status}`);
-  const j = await res.json();
-  const items = (j.news || [])
-    .map(n => ({
-      title: String(n.title || "").trim(),
-      link: n.link || "",
-      date: n.providerPublishTime ? new Date(n.providerPublishTime * 1000).toUTCString() : "",
-      source: n.publisher || "",
-    }))
-    .filter(i => i.title && i.link)
-    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
-    .slice(0, 10);
-  if (!items.length) throw new Error("no headlines for this company");
-  return { data: { query: clean, items } };
+function hostOf(link) {
+  try { return new URL(link).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
 
 function decodeXml(s) {

@@ -6,7 +6,7 @@
 
   // Shared watchlist store. Create a KV namespace in the Cloudflare dashboard
   // (Storage & Databases > KV > Create, name it "stocks-watchlist") and paste its ID here.
-  "kv_namespaces": [{ "binding": "STORE", "id": "PASTE_KV_NAMESPACE_ID_HERE" }],
+  "kv_namespaces": [{ "binding": "STORE", "id": "f4c053426be640a6ad2a16b5e3a01b1b" }],
 
   "assets": { "directory": "./public", "binding": "ASSETS" },
 

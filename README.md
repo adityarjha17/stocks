@@ -6,7 +6,8 @@ One Cloudflare Worker serves the page (public/) and a small API (src/index.js).
 ## Data sources (all free)
 - Yahoo Finance: price, day change, 52-week range, charts, search backup, fallback ratios
 - IndianAPI.in (free plan, 500 calls/month): ratios, peers, results, shareholding
-- Google News RSS: headlines
+- Google News RSS: headlines. Google answers 503 to Cloudflare's addresses, so when
+  that happens the Worker notes it for 15 minutes and uses Yahoo's per-ticker RSS feed instead.
 - NSE company list (public/symbols.json): instant name search. Refresh it monthly with `npm run update-symbols`.
 
 ## Run locally (Windows)

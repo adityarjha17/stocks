@@ -27,6 +27,7 @@ export default {
     try {
       if (url.pathname === "/api/stock") return json(await stockRoute(url, env, ctx));
       if (url.pathname === "/api/index") return json(await indexRoute(url, ctx));
+      if (url.pathname === "/api/peer") return json(await peerRoute(url, ctx));
       if (url.pathname === "/api/chart") return json(await chartRoute(url, ctx));
       if (url.pathname === "/api/watchlist") return json(await watchlistRoute(request, env));
       if (url.pathname === "/api/symbols") return json(await symbolsRoute(ctx));
@@ -42,25 +43,34 @@ export default {
 // One click = one call here.
 async function stockRoute(url, env, ctx) {
   const s = readSymbol(url), ex = readEx(url);
-  const quote = await settle(cached(`y2/${ex}/${s}/1Y`, TTL_PRICE, ctx, () => yahoo(s, ex, "1Y")));
+  // Price/chart and the ratio blocks + results (Yahoo) are fetched together.
+  const [quote, ratios] = await Promise.all([
+    settle(cached(`y2/${ex}/${s}/1Y`, TTL_PRICE, ctx, () => yahoo(s, ex, "1Y"))),
+    settle(cached(`yk/v2/${ex}/${s}`, TTL_FUND / 2, ctx, () => yahooKey(s, ex), TTL_FAIL)),
+  ]);
   const qName = quote.ok ? quote.data.name : null;
-  // Fundamentals: IndianAPI first (has peers, results, shareholding). If it has no
-  // matching company or no quota left, fall back to Yahoo for the key ratios.
+  // Peer list, shareholding and company description: IndianAPI (1 call, kept 12 h).
   const missKey = `i-miss/${s}`;
-  let fundamentals = (await cacheGet(missKey))
-    ? { ok: false, error: "IndianAPI has no exact match for " + s + " (remembered)" }
-    : await settle(cached(`i/v3/${s}`, TTL_FUND, ctx, () => indianApiStock(s, qName, env)));
-  if (!fundamentals.ok && /no exact match/.test(fundamentals.error) && !/remembered/.test(fundamentals.error)) {
+  const name0 = qName || (ratios.ok && ratios.data.companyName) || s;
+  const [profile, news] = await Promise.all([
+    (await cacheGet(missKey))
+      ? { ok: false, error: "IndianAPI has no exact match for " + s + " (remembered)" }
+      : settle(cached(`i/v3/${s}`, TTL_FUND, ctx, () => indianApiStock(s, qName, env))),
+    settle(cached(`n/${s}`, TTL_PRICE, ctx, () => headlines(ctx, { name: name0, symbol: s, ex }), TTL_FAIL)),
+  ]);
+  if (!profile.ok && /no exact match/.test(profile.error) && !/remembered/.test(profile.error)) {
     ctx.waitUntil(cachePut(missKey, 6 * 3600, { miss: true }));
   }
-  if (!fundamentals.ok) {
-    const why = fundamentals.error;
-    fundamentals = await settle(cached(`yf/${ex}/${s}`, TTL_FUND / 2, ctx, () => yahooFundamentals(s, ex)));
-    fundamentals.primaryError = why;
-  }
-  const name = qName || (fundamentals.ok && fundamentals.data.companyName) || s;
-  const news = await settle(cached(`n/${s}`, TTL_PRICE, ctx, () => headlines(ctx, { name, symbol: s, ex }), TTL_FAIL));
-  return { symbol: s, exchange: ex, fetchedAt: new Date().toISOString(), quote, fundamentals, news };
+  return { symbol: s, exchange: ex, fetchedAt: new Date().toISOString(), quote, ratios, profile, news };
+}
+
+// One peer row: price and ratios from Yahoo. The page asks for peers one by one.
+async function peerRoute(url, ctx) {
+  const s = readSymbol(url), ex = readEx(url);
+  const r = await settle(cached(`yk/v2/${ex}/${s}`, TTL_FUND / 2, ctx, () => yahooKey(s, ex), TTL_FAIL));
+  if (!r.ok) return r;
+  const { companyName, price, changePct, ratios } = r.data;
+  return { ok: true, partial: !!r.__ttl, data: { symbol: s, companyName, price, changePct, ratios } };
 }
 
 // Home page: the Nifty 50 index (price, chart) plus market headlines.
@@ -167,7 +177,7 @@ async function yahooSearch(q, ctx) {
 async function rawRoute(url, env) {
   if (env.DEV_DEBUG !== "1" || !["localhost", "127.0.0.1"].includes(url.hostname)) return json({ error: "not found" }, 404);
   const s = readSymbol(url);
-  if (url.searchParams.get("src") === "yahoo") return json(await settle(yahooFundamentals(s, readEx(url))));
+  if (url.searchParams.get("src") === "yahoo") return json(await settle(yahooKey(s, readEx(url))));
   const out = await indianApiRaw(s, env).then(data => ({ data, summary: summarize(data, s) })).catch(e => ({ error: String(e.message || e) }));
   return json(out);
 }
@@ -256,38 +266,92 @@ async function yahooAuth(force) {
   return yAuth;
 }
 
-async function yahooFundamentals(symbol, ex) {
+// ---------- Yahoo: ratio blocks + results ----------
+// quoteSummary gives market cap, P/E, P/B, dividend yield, ROE, ROA, debt/equity, margins.
+// The statements timeseries gives quarterly/annual results and the inputs for ROCE.
+async function yahooSummary(ticker) {
   const mods = "summaryDetail,defaultKeyStatistics,financialData,assetProfile,price";
-  let j, res;
+  let res;
   for (let attempt = 0; attempt < 2; attempt++) {
     const a = await yahooAuth(attempt > 0);
-    res = await fetchT(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol + SUFFIX[ex])}?modules=${mods}&crumb=${encodeURIComponent(a.crumb)}`,
+    res = await fetchT(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=${mods}&crumb=${encodeURIComponent(a.crumb)}`,
       { headers: { "User-Agent": UA, Cookie: a.cookie, Accept: "application/json" } });
-    if (res.status !== 401) break;
+    if (res.status !== 401 && res.status !== 429) break;
   }
-  if (!res.ok) throw new Error(`Yahoo fundamentals HTTP ${res.status}`);
-  j = await res.json();
-  const q = j?.quoteSummary?.result?.[0];
-  if (!q) throw new Error("Yahoo fundamentals returned no data");
-  const raw = o => (o && typeof o.raw === "number" ? o.raw : null);
+  if (!res.ok) throw new Error(`Yahoo summary HTTP ${res.status}`);
+  const q = (await res.json())?.quoteSummary?.result?.[0];
+  if (!q) throw new Error("Yahoo summary returned no data");
+  return q;
+}
+
+const TS_FIELDS = ["TotalRevenue", "OperatingIncome", "NetIncome", "DilutedEPS"];
+async function yahooStatements(ticker) {
+  const now = Math.floor(Date.now() / 1000), from = now - 6 * 365 * 86400;
+  const types = [...TS_FIELDS.flatMap(f => ["quarterly" + f, "annual" + f]), "annualEBIT", "annualTotalAssets", "annualCurrentLiabilities"];
+  const res = await fetchT(`https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(ticker)}?symbol=${encodeURIComponent(ticker)}&type=${types.join(",")}&period1=${from}&period2=${now}`,
+    { headers: { "User-Agent": UA, Accept: "application/json" } });
+  if (!res.ok) throw new Error(`Yahoo statements HTTP ${res.status}`);
+  const out = {};   // out[type][date] = value
+  for (const x of (await res.json())?.timeseries?.result || []) {
+    const t = x?.meta?.type?.[0];
+    if (!t) continue;
+    for (const v of x[t] || []) if (v && v.asOfDate && typeof v.reportedValue?.raw === "number") (out[t] ||= {})[v.asOfDate] = v.reportedValue.raw;
+  }
+  return out;
+}
+
+async function yahooKey(symbol, ex) {
+  const ticker = symbol + SUFFIX[ex];
+  const stmts = t => yahooStatements(t).catch(() => yahooStatements(t)).catch(() => null);   // one retry
+  let [q, st] = await Promise.all([ex === "BSE" ? yahooSummary(ticker).catch(() => null) : yahooSummary(ticker), stmts(ticker)]);
+  // Yahoo often has thin or no BSE data: use the NSE listing of the same company instead.
+  if (ex === "BSE" && (!q || (raw(q.summaryDetail?.trailingPE) == null && raw(q.defaultKeyStatistics?.priceToBook) == null))) {
+    const alt = await Promise.all([yahooSummary(symbol + ".NS"), stmts(symbol + ".NS")]).catch(() => null);
+    if (alt) [q, st] = alt;
+  }
+  if (!q) throw new Error("Yahoo has no data for this stock");
+  const partial = !st;     // statements failed twice: keep the ratios, but only for a short while
+  st = st || {};
   const x100 = v => (v == null ? null : v * 100);
   const sd = q.summaryDetail || {}, ks = q.defaultKeyStatistics || {}, fd = q.financialData || {}, ap = q.assetProfile || {}, pr = q.price || {};
   const mcap = raw(sd.marketCap) ?? raw(pr.marketCap);
   const de = raw(fd.debtToEquity);
-  const ratios = {
-    mcap: mcap == null ? null : mcap / 1e7,           // rupees -> Rs Cr
-    pe: raw(sd.trailingPE), pb: raw(ks.priceToBook), dy: x100(raw(sd.dividendYield)),
-    roe: x100(raw(fd.returnOnEquity)), roi: null, roa: x100(raw(fd.returnOnAssets)),
-    de: de == null ? null : de / 100,                 // Yahoo gives a percentage
-    ltde: null, opm: x100(raw(fd.operatingMargins)), npm: x100(raw(fd.profitMargins)),
+  const cr = v => (v == null ? null : v / 1e7);                      // rupees -> Rs Cr
+  // ROCE = EBIT / (total assets - current liabilities), latest year that has all three.
+  let roce = null, roceYear = null;
+  const ebit = st.annualEBIT || {}, ta = st.annualTotalAssets || {}, cl = st.annualCurrentLiabilities || {};
+  for (const d of Object.keys(ebit).sort().reverse()) {
+    if (ta[d] != null && cl[d] != null && ta[d] - cl[d] > 0) { roce = (ebit[d] / (ta[d] - cl[d])) * 100; roceYear = d; break; }
+  }
+  const rows = kind => {
+    const dates = [...new Set(TS_FIELDS.flatMap(f => Object.keys(st[kind + f] || {})))].sort().reverse();
+    return dates.map(d => {
+      const g = f => (st[kind + f] || {})[d] ?? null;
+      const rev = g("TotalRevenue"), op = g("OperatingIncome");
+      return { end: d, revenue: cr(rev), opInc: cr(op), opm: rev && op != null ? (op / rev) * 100 : null, netProfit: cr(g("NetIncome")), eps: g("DilutedEPS") };
+    }).filter(x => x.revenue != null || x.netProfit != null);
   };
-  if (ratios.pe == null && ratios.pb == null && ratios.mcap == null) throw new Error("Yahoo fundamentals are empty for this stock");
+  const ratios = {
+    mcap: cr(mcap), pe: raw(sd.trailingPE), pb: raw(ks.priceToBook), dy: x100(raw(sd.dividendYield)),
+    roce, roceYear, roe: x100(raw(fd.returnOnEquity)), roa: x100(raw(fd.returnOnAssets)),
+    de: de == null ? null : de / 100,                                // Yahoo gives debt/equity as a percentage
+    opm: x100(raw(fd.operatingMargins)), npm: x100(raw(fd.profitMargins)),
+  };
+  if (ratios.pe == null && ratios.pb == null && ratios.mcap == null) throw new Error("Yahoo has no ratios for this stock");
   return {
-    data: { companyName: pr.longName || pr.shortName || symbol, industry: ap.industry || ap.sector || null,
-      description: ap.longBusinessSummary || "", nse: symbol, bse: null, ratios, peers: [], quarterly: [], annual: [], shareholding: [] },
+    data: {
+      companyName: pr.longName || pr.shortName || symbol, industry: ap.industry || ap.sector || null,
+      description: ap.longBusinessSummary || "",
+      price: raw(pr.regularMarketPrice), changePct: x100(raw(pr.regularMarketChangePercent)),
+      ratios, quarterly: rows("quarterly").slice(0, 8), annual: rows("annual").slice(0, 5),
+    },
     source: "Yahoo Finance",
+    ...(partial ? { __ttl: TTL_FAIL } : {}),
   };
 }
+
+function raw(o) { return o && typeof o.raw === "number" ? o.raw : null; }
+
 
 // Keep only what the page uses (smaller cache, simpler page code).
 function summarize(d, symbol) {
@@ -446,7 +510,8 @@ async function cached(key, ttl, ctx, loader, failTtl = 0) {
     if (failTtl) ctx.waitUntil(cachePut(key, failTtl, { __fail: true, error: msg }));
     throw e;
   }
-  const res = new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` } });
+  // An answer can ask for a shorter life (e.g. ratios saved without results after a Yahoo hiccup).
+  const res = new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${value.__ttl || ttl}` } });
   ctx.waitUntil(cache.put(req, res));
   return value;
 }

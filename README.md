@@ -4,11 +4,12 @@ Personal stock analysis page for Indian stocks. Live at https://stocks.adityarjh
 One Cloudflare Worker serves the page (public/) and a small API (src/index.js).
 
 ## Data sources (all free)
-- Yahoo Finance: price, day change, 52-week range, charts, search backup, fallback ratios
-- IndianAPI.in (free plan, 500 calls/month): ratios, peers, results, shareholding
-- Google News RSS: headlines. Google answers 503 to Cloudflare's addresses, so when
-  that happens the Worker notes it for 15 minutes and uses Yahoo's per-ticker RSS feed instead.
+- Yahoo Finance: price, day change, 52-week range, charts, the 9 ratio blocks (market cap, P/E, P/B, dividend yield, ROCE, ROE, ROA, debt/equity, OPM), quarterly and annual results, and every figure in the peers table
+- IndianAPI.in (free plan, 500 calls/month): the list of peer companies, shareholding, company description, and quarterly results when Yahoo has none recent (mostly banks)
+- Google News RSS, with Yahoo headlines as backup: news
 - NSE company list (public/symbols.json): instant name search. Refresh it monthly with `npm run update-symbols`.
+
+ROCE is calculated as EBIT / (total assets - current liabilities) from Yahoo's latest annual figures.
 
 ## Run locally (Windows)
 1. First time only: double-click setup.cmd (installs Node.js and Wrangler).

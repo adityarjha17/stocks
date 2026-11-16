@@ -23,6 +23,13 @@ h1,h2,h3{color:var(--heading);line-height:1.15}
 .container{max-width:1080px;margin:0 auto;padding:0 24px}
 .cursor-glow{position:fixed;width:560px;height:560px;border-radius:50%;pointer-events:none;z-index:0;top:-280px;left:-280px;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 7%,transparent) 0%,transparent 65%)}
 [data-theme="light"] .cursor-glow{background:radial-gradient(circle,color-mix(in srgb,var(--accent) 10%,transparent) 0%,transparent 65%)}
+.cursor-ring,.cursor-dot{position:fixed;top:0;left:0;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .3s}
+.has-cursor .cursor-ring,.has-cursor .cursor-dot{opacity:1}
+.cursor-ring{width:34px;height:34px;margin:-17px 0 0 -17px;border:1.5px solid var(--accent);z-index:9998;transition:opacity .3s,width .2s,height .2s,margin .2s,background-color .2s}
+.cursor-ring.hovering{width:56px;height:56px;margin:-28px 0 0 -28px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.cursor-ring.pressed{width:26px;height:26px;margin:-13px 0 0 -13px}
+.cursor-dot{width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--accent);z-index:9999}
+@media (hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){.cursor-ring,.cursor-dot{display:none}}
 main,header,footer{position:relative;z-index:1}
 
 /* Sample banner */
@@ -90,7 +97,7 @@ section{padding:56px 0;border-top:1px solid var(--border)}
 .src{font-size:11px;color:var(--muted);margin-top:10px;display:inline-block;border:1px dashed var(--border-strong);border-radius:6px;padding:2px 8px}
 
 /* Ratios */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px}
 .stat .k{font-size:12px;color:var(--muted)}
 .stat .v{font-size:24px;font-weight:800;color:var(--heading);margin-top:4px;letter-spacing:-.01em}
@@ -185,6 +192,8 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .recent button i{font-style:normal;margin-left:6px;color:var(--bad);font-weight:700}
 .recent button.wl-ctl{border-style:dashed;color:var(--muted)}
 .data-note{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:0 24px 32px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border-strong);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
 /* Footer easter egg */
 .brew-wrap{position:relative}
 .brew{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
@@ -221,7 +230,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 </style>
 </head>
 <body>
-<div class="cursor-glow" aria-hidden="true"></div>
+<div class="cursor-glow" aria-hidden="true"></div><div class="cursor-ring" aria-hidden="true"></div><div class="cursor-dot" aria-hidden="true"></div>
 <div class="sample mono" id="status" role="status" aria-live="polite">TEMPLATE PREVIEW: <b>sample data</b>. Run the app locally to load live data.</div>
 
 <header>
@@ -280,7 +289,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   </div>
 
   <section id="ratios"><div class="container sec">
-    <div class="heading reveal"><span class="index mono">01</span><h2>Key ratios</h2><p>The numbers Screener shows at the top.</p><span class="src mono src-fund">source: IndianAPI</span></div>
+    <div class="heading reveal"><span class="index mono">01</span><h2>Key ratios</h2><p>The numbers Screener shows at the top.</p><span class="src mono">source: Yahoo Finance</span></div>
     <div class="stats" id="stats">
       <div class="stat reveal"><div class="k">Market cap</div><div class="v mono">₹1.68L Cr</div></div>
       <div class="stat reveal"><div class="k">P/E</div><div class="v mono">28.4</div><div class="m">peer median 31.2</div></div>
@@ -310,7 +319,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   </div></section>
 
   <section id="peers"><div class="container sec">
-    <div class="heading reveal"><span class="index mono">03</span><h2>Peers</h2><p>This stock is highlighted. Click a peer to open it. Last row is the peer median.</p><span class="src mono src-fund">source: IndianAPI</span></div>
+    <div class="heading reveal"><span class="index mono">03</span><h2>Peers</h2><p>This stock is highlighted. Rows fill in as each peer loads. Click a peer to open it.</p><span class="src mono">list: IndianAPI · figures: Yahoo</span></div>
     <div class="tbl-wrap reveal">
       <table id="peer-table">
         <thead><tr><th>Company</th><th>Price ₹</th><th>M.Cap ₹Cr</th><th>P/E</th><th>P/B</th><th>ROE %</th><th>ROCE %</th><th>D/E</th><th>Sales gr. YoY</th><th>Promoter %</th></tr></thead>
@@ -327,7 +336,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   </div></section>
 
   <section id="results"><div class="container sec">
-    <div class="heading reveal"><span class="index mono">04</span><h2>Results</h2><p>Figures in ₹ Cr.</p><span class="src mono src-fund">source: IndianAPI</span></div>
+    <div class="heading reveal"><span class="index mono">04</span><h2>Results</h2><p>Figures in ₹ Cr.</p><span class="src mono" id="res-src">source: Yahoo Finance</span></div>
     <div class="reveal">
       <div class="card-top"><div class="tabs" id="res-tabs"><button class="on" data-t="q">Quarterly</button><button data-t="a">Annual</button></div></div>
       <div class="tbl-wrap"><table id="res-table"></table></div>
@@ -335,7 +344,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   </div></section>
 
   <section id="checks"><div class="container sec">
-    <div class="heading reveal"><span class="index mono">05</span><h2>Quick check</h2><p>Simple rules against the peer median, plus shareholding. Calculated on the page.</p><span class="src mono">source: calculated</span></div>
+    <div class="heading reveal"><span class="index mono">05</span><h2>Quick check</h2><p>Simple rules against the peer median, plus shareholding (IndianAPI). Calculated on the page.</p><span class="src mono">source: calculated</span></div>
     <div>
       <div class="checks" id="checks-grid">
         <div class="card check reveal"><div class="ico ok">✓</div><div><h3>Valuation</h3><p>P/E 28.4 is below the peer median of 31.2.</p></div></div>
@@ -363,7 +372,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 </main>
 
 <footer><div class="container mono" style="text-align:center;font-size:14px">
-  <span class="brew-wrap"><button type="button" class="brew" id="brew" title="psst">Brewed</button> in Bengaluru by <a href="https://adityarjha.com" target="_blank" rel="noopener" style="color:var(--accent)">Aditya</a></span>
+  <span class="brew-wrap"><button type="button" class="brew" id="brew" title="psst">Brewed in Bengaluru by <span style="color:var(--accent)">Aditya</span></button></span>
 </div></footer>
 
 <div class="brew-sky" id="brew-sky" hidden>
@@ -380,8 +389,18 @@ document.getElementById('theme-toggle').onclick=()=>{
 };
 // Watchlist chip fills the search box (live fetch comes in the next step)
 // Cursor glow
-const glow=document.querySelector('.cursor-glow');
-addEventListener('pointermove',e=>{glow.style.transform=`translate3d(${e.clientX}px,${e.clientY}px,0)`});
+const glow=document.querySelector('.cursor-glow'),ring=document.querySelector('.cursor-ring'),dot=document.querySelector('.cursor-dot');
+if(matchMedia('(hover:hover) and (pointer:fine)').matches&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+ let mx=-100,my=-100,rx=-100,ry=-100;
+ addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;document.body.classList.add('has-cursor')},{passive:true});
+ document.addEventListener('mouseleave',()=>document.body.classList.remove('has-cursor'));
+ addEventListener('mousedown',()=>ring.classList.add('pressed'));
+ addEventListener('mouseup',()=>ring.classList.remove('pressed'));
+ document.addEventListener('mouseover',e=>ring.classList.toggle('hovering',!!(e.target.closest&&e.target.closest('a,button,.sg,select,[role=button]'))));
+ (function loop(){rx+=(mx-rx)*.22;ry+=(my-ry)*.22;
+  dot.style.transform=`translate3d(${mx}px,${my}px,0)`;ring.style.transform=`translate3d(${rx}px,${ry}px,0)`;glow.style.transform=`translate3d(${mx}px,${my}px,0)`;
+  requestAnimationFrame(loop)})();
+}else addEventListener('pointermove',e=>{glow.style.transform=`translate3d(${e.clientX}px,${e.clientY}px,0)`});
 // Reveal on scroll
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
@@ -403,7 +422,7 @@ async function getJSON(url,key,mins,good){
 }
 function setStatus(html){$('status').innerHTML=html}
 let live={sym:null,ex:'NSE',name:''};
-let loadSeq=0; // increases on every stock or home load; answers for older loads are ignored
+let loadSeq=0, peerSeq=0; // increases on every stock or home load; answers for older loads are ignored
 const fmtP=v=>live.home?(v==null?'-':Number(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})):fmtINR(v);
 
 // ---------- Chart (interactive) ----------
@@ -578,7 +597,7 @@ async function loadHome(){
   sugg=[];renderSugg(); inp.value=''; setStatus('Loading Nifty 50…');
   let d; try{d=await getJSON('/api/index?range=1Y&news=1','idx:home',15,v=>v.quote&&v.quote.ok)}catch(e){if(my===loadSeq)setStatus('Live data is not available here (preview mode). Showing sample data.');return}
   if(my!==loadSeq)return;
-  live={sym:null,ex:'NSE',name:'Nifty 50',home:true}; setHomeMode(true); document.title='Stocks | Aditya Jha';
+  peerSeq++; live={sym:null,ex:'NSE',name:'Nifty 50',home:true}; setHomeMode(true); document.title='Stocks | Aditya Jha';
   $('co-name').textContent='Nifty 50'; $('co-chips').innerHTML='<li class="status"><span class="dot"></span>NSE index</li>';
   $('co-sub').textContent='The 50 largest companies on the NSE. Search or pick a stock from the watchlist to see its details.';
   const q=d.quote&&d.quote.ok?d.quote.data:null;
@@ -614,16 +633,16 @@ async function load(sym,ex,nameHint){
   sugg=[];renderSugg(); inp.value=sym; inp.blur();
   setStatus(`Loading <b>${escH(sym)}</b> (${ex})…`);
   let d;
-  try{d=await getJSON(`/api/stock?symbol=${encodeURIComponent(sym)}&ex=${ex}`,`stock2:${ex}:${sym}`,30,v=>!v.error&&v.quote&&v.quote.ok&&v.fundamentals&&v.fundamentals.ok)}
+  try{d=await getJSON(`/api/stock?symbol=${encodeURIComponent(sym)}&ex=${ex}`,`stock3:${ex}:${sym}`,30,v=>!v.error&&v.quote&&v.quote.ok&&v.ratios&&v.ratios.ok&&!v.ratios.__ttl)}
   catch(e){if(my===loadSeq)setStatus('Live data is not available here (preview mode). Showing sample data.');return false}
   if(my!==loadSeq)return false; // a newer click took over while we waited
   if(d.error){setStatus(`Error: ${escH(d.error)}`);fixHash();return false}
-  const qOK=d.quote&&d.quote.ok, fOK=d.fundamentals&&d.fundamentals.ok;
+  const qOK=d.quote&&d.quote.ok, fOK=d.ratios&&d.ratios.ok, pOK=d.profile&&d.profile.ok;
   if(!qOK&&live.sym===sym&&ex!==live.ex){setStatus(`<b>${escH(sym)}</b> has no ${ex} price on Yahoo under this symbol. Staying on ${live.ex}.`);setEx(live.ex);fixHash();return false}
   if(!qOK&&!fOK){setStatus(`No data found for <b>${escH(sym)}</b> on ${ex}. Pick a company from the search suggestions.`);fixHash();return false}
   const q=qOK?d.quote.data:null;
   setHomeMode(false);
-  live={sym,ex,name:(q&&q.name)||(fOK&&d.fundamentals.data.companyName)||nameHint||sym};
+  live={sym,ex,name:(q&&q.name)||(fOK&&d.ratios.data.companyName)||nameHint||sym};
   window.lastData=d; setEx(ex);
   // Give each stock its own address, so the browser's back and forward buttons work.
   const h=hashFor(sym,ex); if(location.hash!==h){try{location.hash=h}catch(e){}}
@@ -645,10 +664,8 @@ async function load(sym,ex,nameHint){
   document.querySelectorAll('#range-tabs button').forEach(x=>x.classList.toggle('on',x.dataset.r==='1Y'));currentRange='1Y';drawChart('1Y');
   $('lnk-scr').href=`https://www.screener.in/company/${encodeURIComponent(sym)}/consolidated/`;
   $('lnk-nse').href=`https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(sym)}`;
-  // Fundamentals
-  const src=fOK?d.fundamentals.source:'unavailable';
-  document.querySelectorAll('.src-fund').forEach(el=>el.textContent='source: '+src);
-  if(fOK)renderFundamentals(d.fundamentals.data,q,sym); else clearFundamentals('Not available right now. Use the Screener link at the top.');
+  // Ratios, results, peers, shareholding
+  renderStock(d,sym,my);
   // News
   if(d.news&&d.news.ok&&d.news.data.items.length){
     const ago=t=>{const h=(Date.now()-Date.parse(t))/36e5;return h<1?'just now':h<24?Math.round(h)+'h ago':Math.round(h/24)+'d ago'};
@@ -658,71 +675,125 @@ async function load(sym,ex,nameHint){
   const ok=b=>b?'✓':'✗';
   let note='';
   if(q&&q.time&&Date.now()/1000-q.time>7*86400)note+=`<br><b>Note:</b> the last trade on ${ex} was on ${fmtD(q.time)}. This stock may be suspended, merged or delisted, so the numbers can be out of date.`;
-  if(fOK&&src!=='IndianAPI')note+=`<br>Ratios are from Yahoo because the main source had no match (${escH(d.fundamentals.primaryError||'')}). Peers, results and shareholding are not available for this stock.`;
-  if(!fOK)note+=`<br>fundamentals: ${escH(d.fundamentals.error||'')}`;
+  if(!fOK)note+=`<br>ratios: ${escH(d.ratios&&d.ratios.error||'')}`;
+  if(!pOK)note+=`<br>peer list and shareholding: ${escH(d.profile&&d.profile.error||'')}`;
   if(d.news&&!d.news.ok)note+=`<br>news: ${escH(d.news.error)}`;
-  setStatus(`<b>${escH(sym)}</b> on ${ex} · price & chart ${ok(qOK)} · fundamentals ${ok(fOK)}${fOK?' ('+src+')':''} · news ${ok(d.news&&d.news.ok)}${note}`);
+  setStatus(`<b>${escH(sym)}</b> on ${ex} · price & chart ${ok(qOK)} · ratios & results ${ok(fOK)} · peers & shareholding ${ok(pOK)} · news ${ok(d.news&&d.news.ok)}${note}`);
   $('fetched').textContent='Fetched '+new Date(d.fetchedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'});
   renderWL();
   return true;
 }
-function clearFundamentals(msg){
-  const m=`<p class="nm mono">${msg}</p>`;
-  $('stats').innerHTML=m; $('peer-table').innerHTML=`<tbody><tr><td>${msg}</td></tr></tbody>`;
-  liveRes={q:{h:[],rows:[]},a:{h:[],rows:[]}}; drawRes('q');
-  $('checks-grid').innerHTML=m; $('sh-list').innerHTML=''; $('about').textContent='';
-}
 
-// ---------- Fundamentals (IndianAPI) -> page ----------
+// ---------- Stock page: ratios + results (Yahoo), peer list + shareholding (IndianAPI) ----------
 const nf=(v,dp=1)=>v==null||!isFinite(v)?'-':Number(v).toLocaleString('en-IN',{minimumFractionDigits:dp,maximumFractionDigits:dp});
 const pct=(v,dp=1)=>v==null||!isFinite(v)?'-':nf(v,dp)+'%';
 const crore=v=>v==null?'-':v>=1e5?'₹'+nf(v/1e5,2)+'L Cr':'₹'+nf(v,0)+' Cr';
 const median=a=>{a=a.filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y);if(!a.length)return null;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2};
-function renderFundamentals(f,q,sym){
-  const R=f.ratios||{}, P=f.peers||[];
-  const med={pe:median(P.map(p=>p.pe).filter(v=>v!=null&&v>0)),pb:median(P.map(p=>p.pb)),roe:median(P.map(p=>p.roe)),dy:median(P.map(p=>p.dy)),npm:median(P.map(p=>p.npm)),ltde:median(P.map(p=>p.ltde)),mcap:median(P.map(p=>p.mcap))};
-  // Header extras
-  $('co-sub').textContent=(f.description||'').split(/(?<=\.)\s/).slice(0,2).join(' ').slice(0,260);
-  $('co-chips').innerHTML=`<li class="status"><span class="dot"></span>${live.ex}: ${escH(sym)}${f.bse&&live.ex==='NSE'?' · BSE code '+escH(f.bse):''}</li>`+(f.industry?`<li class="status">Industry: ${escH(f.industry)}</li>`:'');
-  // 01 Key ratios
-  const tile=(k,v,m)=>`<div class="stat reveal in"><div class="k">${k}</div><div class="v mono">${v}</div>${m?`<div class="m">${m}</div>`:''}</div>`;
+const SPIN='<span class="spin" aria-label="loading"></span>';
+const fyLabel=end=>'FY'+String(end).slice(2,4);
+const monLabel=e=>new Date(e+'T00:00:00').toLocaleString('en-IN',{month:'short',year:'numeric'});
+
+// 9 ratio blocks. `med` is null while peers are still loading.
+function renderTiles(R,med,loading){
+  const m=(k,fmt)=>loading?'peer median '+SPIN:med&&med[k]!=null?'peer median '+fmt(med[k]):'';
+  const tile=(k,v,sub)=>`<div class="stat reveal in"><div class="k">${k}</div><div class="v mono">${v}</div>${sub?`<div class="m">${sub}</div>`:''}</div>`;
   $('stats').innerHTML=[
     tile('Market cap',crore(R.mcap)),
-    tile('P/E (TTM)',nf(R.pe),med.pe!=null?'peer median '+nf(med.pe):''),
-    tile('P/B',nf(R.pb),med.pb!=null?'peer median '+nf(med.pb):''),
-    tile('Dividend yield',pct(R.dy),med.dy!=null?'peer median '+pct(med.dy):''),
-    tile('ROE (TTM)',pct(R.roe),med.roe!=null?'peer median '+pct(med.roe):''),
-    R.roi!=null?tile('ROI (TTM)',pct(R.roi),'closest to ROCE in this source'):tile('ROA (TTM)',pct(R.roa),'return on assets'),
-    tile('Debt / Equity',nf(R.de,2),'total debt to equity'),
-    tile('OPM (TTM)',pct(R.opm),'net margin '+pct(R.npm)),
+    tile('P/E (TTM)',nf(R.pe),m('pe',nf)),
+    tile('P/B',nf(R.pb),m('pb',nf)),
+    tile('Dividend yield',pct(R.dy),m('dy',pct)),
+    tile('ROCE',pct(R.roce),R.roceYear?fyLabel(R.roceYear)+(m('roce',pct)?' · '+m('roce',pct):''):m('roce',pct)),
+    tile('ROE (TTM)',pct(R.roe),m('roe',pct)),
+    tile('ROA (TTM)',pct(R.roa),m('roa',pct)),
+    tile('Debt / Equity',nf(R.de,2),m('de',v=>nf(v,2))),
+    tile('OPM (TTM)',pct(R.opm),m('opm',pct)),
   ].join('');
-  // 03 Peers (same metric definitions for every row)
-  const self={name:f.companyName||sym,price:q?q.price:null,mcap:R.mcap,pe:R.pe,pb:R.pb,roe:R.roe,npm:R.npm,ltde:R.ltde,dy:R.dy,rating:null,self:true};
-  const rowH=(p,cls='')=>`<tr class="${cls}"><td class="name">${p.self?escH(p.name):`<a href="#top" data-peer="${escH(p.name)}" title="Open this company">${escH(p.name)}</a>`}</td><td class="mono">${p.price==null?'-':nf(p.price,1)}</td><td class="mono">${p.mcap==null?'-':nf(p.mcap,0)}</td><td class="mono">${nf(p.pe)}</td><td class="mono">${nf(p.pb)}</td><td class="mono">${nf(p.roe)}</td><td class="mono">${nf(p.npm)}</td><td class="mono">${nf(p.ltde,2)}</td><td class="mono">${nf(p.dy,2)}</td><td>${escH(p.rating||'-')}</td></tr>`;
-  $('peer-table').innerHTML=`<thead><tr><th>Company</th><th>Price ₹</th><th>M.Cap ₹Cr</th><th>P/E</th><th>P/B</th><th>ROE %</th><th>Net margin %</th><th>LT D/E</th><th>Div yield %</th><th>Rating</th></tr></thead><tbody>`+
-    rowH(self,'self')+P.map(p=>rowH(p)).join('')+
-    (P.length?`<tr class="median"><td>Peer median</td><td>-</td><td>${nf(med.mcap,0)}</td><td>${nf(med.pe)}</td><td>${nf(med.pb)}</td><td>${nf(med.roe)}</td><td>${nf(med.npm)}</td><td>${nf(med.ltde,2)}</td><td>${nf(med.dy,2)}</td><td>-</td></tr>`:'<tr><td colspan="10">No peers returned by the source.</td></tr>')+'</tbody>';
-  // 04 Results (oldest to newest, left to right)
-  const mon=e=>new Date(e+'T00:00:00').toLocaleString('en-IN',{month:'short',year:'numeric'});
-  const mk=(list,label)=>{const L=list.slice(0,5).reverse();return{h:L.map(label),rows:[
-    ['Revenue',...L.map(x=>nf(x.revenue,0))],['Operating income',...L.map(x=>nf(x.opInc,0))],['Operating margin %',...L.map(x=>pct(x.opm))],
-    ['Net profit',...L.map(x=>nf(x.netProfit,0))],['EPS ₹',...L.map(x=>nf(x.eps,2))]]}};
-  liveRes={q:mk(f.quarterly||[],x=>mon(x.end)),a:mk(f.annual||[],x=>'FY'+String(x.fy).slice(-2))};
-  document.querySelectorAll('#res-tabs button').forEach(x=>x.classList.toggle('on',x.dataset.t==='q'));drawRes('q');
-  // 05 Quick check
+}
+
+function renderChecks(R,med,Y){
   const chk=(lvl,title,text)=>`<div class="card check reveal in"><div class="ico ${lvl}">${lvl==='ok'?'✓':lvl==='warn'?'!':'✕'}</div><div><h3>${title}</h3><p>${text}</p></div></div>`;
   const cards=[];
   if(R.pe!=null&&R.pe<=0)cards.push(chk('bad','Valuation',`Negative P/E (${nf(R.pe)}): the company made a loss over the last 12 months.`));
-  else if(R.pe!=null&&med.pe!=null)cards.push(chk(R.pe<=med.pe?'ok':R.pe<=med.pe*1.25?'warn':'bad','Valuation',`P/E ${nf(R.pe)} vs peer median ${nf(med.pe)}.`));
-  if(R.roe!=null&&med.roe!=null)cards.push(chk(R.roe>=med.roe?'ok':R.roe>=med.roe*0.8?'warn':'bad','Profitability',`ROE ${pct(R.roe)} vs peer median ${pct(med.roe)}.`));
-  const Q=f.quarterly||[];
-  if(Q.length>=5&&Q[0].revenue&&Q[4].revenue){const g=(Q[0].revenue/Q[4].revenue-1)*100;cards.push(chk(g>=10?'ok':g>=0?'warn':'bad','Growth',`Revenue ${g>=0?'+':''}${nf(g)}% vs same quarter last year.`))}
+  else if(R.pe!=null&&med&&med.pe!=null)cards.push(chk(R.pe<=med.pe?'ok':R.pe<=med.pe*1.25?'warn':'bad','Valuation',`P/E ${nf(R.pe)} vs peer median ${nf(med.pe)}.`));
+  const pk=R.roce!=null&&med&&med.roce!=null?'roce':'roe', pv=R[pk], pm=med&&med[pk];
+  if(pv!=null&&pm!=null)cards.push(chk(pv>=pm?'ok':pv>=pm*0.8?'warn':'bad','Profitability',`${pk.toUpperCase()} ${pct(pv)} vs peer median ${pct(pm)}.`));
+  // Growth: same quarter a year earlier if Yahoo has it, otherwise the last two years.
+  const Q=(Y&&Y.quarterly)||[], A=(Y&&Y.annual)||[];
+  const prevQ=Q[0]&&Q.find(x=>{const a=new Date(Q[0].end),b=new Date(x.end);return Math.abs((a-b)/864e5-365)<20});
+  if(Q[0]&&prevQ&&Q[0].revenue&&prevQ.revenue){const g=(Q[0].revenue/prevQ.revenue-1)*100;cards.push(chk(g>=10?'ok':g>=0?'warn':'bad','Growth',`Revenue ${g>=0?'+':''}${nf(g)}% vs the same quarter last year.`))}
+  else if(A.length>=2&&A[0].revenue&&A[1].revenue){const g=(A[0].revenue/A[1].revenue-1)*100;cards.push(chk(g>=10?'ok':g>=0?'warn':'bad','Growth',`Revenue ${g>=0?'+':''}${nf(g)}% in ${fyLabel(A[0].end)} vs ${fyLabel(A[1].end)}.`))}
   if(R.de!=null)cards.push(chk(R.de<0.5?'ok':R.de<1?'warn':'bad','Debt',`Debt/Equity ${nf(R.de,2)} (under 0.5 is comfortable).`));
   $('checks-grid').innerHTML=cards.join('')||'<p class="nm">Not enough data for checks.</p>';
-  // Shareholding + about
-  const SH=f.shareholding||[];
-  $('sh-list').innerHTML=!SH.length?'<li class="nm">Not available from this source.</li>':SH.map(s=>{const d=s.pct!=null&&s.prevPct!=null?s.pct-s.prevPct:null;return `<li>${escH(s.name)}: <b class="mono">${s.pct==null?'none':pct(s.pct,2)}</b>${d!=null&&Math.abs(d)>=0.01?` <span class="${d>0?'up':'down'} mono">(${d>0?'+':''}${nf(d,2)} vs prev qtr)</span>`:''}</li>`}).join('')+(SH[0]&&SH.find(s=>s.date)?`<li class="nm">as of ${escH(SH.find(s=>s.date).date)}</li>`:'');
-  $('about').textContent=(f.description||'').slice(0,600)+((f.description||'').length>600?'…':'');
+}
+
+const PEER_COLS=['price','chgPct','mcap','pe','pb','roce','roe','opm','de','dy'];
+function peerCells(p){
+  const R=p.ratios||{};
+  return [p.price==null?'-':nf(p.price,1),p.changePct==null?'-':`<span class="${p.changePct>=0?'up':'down'}">${p.changePct>=0?'+':''}${nf(p.changePct,2)}%</span>`,
+    R.mcap==null?'-':nf(R.mcap,0),nf(R.pe),nf(R.pb),nf(R.roce),nf(R.roe),nf(R.opm),nf(R.de,2),nf(R.dy,2)].map(c=>`<td class="mono">${c}</td>`).join('');
+}
+
+function renderStock(d,sym,my){
+  const Y=d.ratios&&d.ratios.ok?d.ratios.data:null, P=d.profile&&d.profile.ok?d.profile.data:null, q=d.quote&&d.quote.ok?d.quote.data:null;
+  const R=Y?Y.ratios:{};
+  const desc=(P&&P.description)||(Y&&Y.description)||'', industry=(P&&P.industry)||(Y&&Y.industry);
+  $('co-sub').textContent=desc.split(/(?<=\.)\s/).slice(0,2).join(' ').slice(0,260);
+  $('co-chips').innerHTML=`<li class="status"><span class="dot"></span>${live.ex}: ${escH(sym)}${P&&P.bse&&live.ex==='NSE'?' · BSE code '+escH(P.bse):''}</li>`+(industry?`<li class="status">Industry: ${escH(industry)}</li>`:'');
+  // 01 ratios
+  const own=norm(live.name).split(' ').slice(0,2).join(' ');
+  const names=P?(P.peers||[]).map(p=>p.name).filter(n=>n&&!norm(n).startsWith(own)):[];
+  if(Y)renderTiles(R,null,names.length>0); else $('stats').innerHTML='<p class="nm mono">Ratios are not available right now. Use the Screener link at the top.</p>';
+  // 04 results (oldest to newest, left to right)
+  const mk=(list,label)=>{const L=list.slice(0,5).reverse();return{h:L.map(label),rows:[
+    ['Revenue',...L.map(x=>nf(x.revenue,0))],['Operating income',...L.map(x=>nf(x.opInc,0))],['Operating margin %',...L.map(x=>pct(x.opm))],
+    ['Net profit',...L.map(x=>nf(x.netProfit,0))],['EPS ₹',...L.map(x=>nf(x.eps,2))]]}};
+  // Results: Yahoo first. If Yahoo's list is short or stale (common for banks and insurers), use IndianAPI's.
+  const fresh=(list,maxDays)=>list.length>=3&&(Date.now()-new Date(list[0].end))/864e5<maxDays;
+  const yQ=(Y&&Y.quarterly)||[], yA=(Y&&Y.annual)||[], iQ=(P&&P.quarterly)||[], iA=(P&&P.annual)||[];
+  const useQ=fresh(yQ,270)||!iQ.length?yQ:iQ, useA=fresh(yA,550)||!iA.length?yA:iA;
+  liveRes={q:mk(useQ,x=>monLabel(x.end)),a:mk(useA,x=>x.fy?'FY'+String(x.fy).slice(-2):fyLabel(x.end))};
+  const qy=useQ===yQ, ay=useA===yA;
+  $('res-src').textContent='source: '+(qy&&ay?'Yahoo Finance':!qy&&!ay?'IndianAPI (Yahoo has no recent results)':`quarterly ${qy?'Yahoo':'IndianAPI'} · annual ${ay?'Yahoo':'IndianAPI'}`);
+  document.querySelectorAll('#res-tabs button').forEach(x=>x.classList.toggle('on',x.dataset.t==='q'));drawRes('q');
+  // 05 checks (first without peers, again once peers arrive)
+  renderChecks(R,null,Y);
+  const SH=P?(P.shareholding||[]):[];
+  $('sh-list').innerHTML=!SH.length?'<li class="nm">Not available for this stock.</li>':SH.map(s=>{const dd=s.pct!=null&&s.prevPct!=null?s.pct-s.prevPct:null;return `<li>${escH(s.name)}: <b class="mono">${s.pct==null?'none':pct(s.pct,2)}</b>${dd!=null&&Math.abs(dd)>=0.01?` <span class="${dd>0?'up':'down'} mono">(${dd>0?'+':''}${nf(dd,2)} vs prev qtr)</span>`:''}</li>`}).join('')+(SH.find(s=>s.date)?`<li class="nm">as of ${escH(SH.find(s=>s.date).date)}</li>`:'');
+  $('about').textContent=desc.slice(0,600)+(desc.length>600?'…':'');
+  // 03 peers: names from IndianAPI, figures from Yahoo, filled in row by row
+  const head=`<thead><tr><th>Company</th><th>Price ₹</th><th>Day</th><th>M.Cap ₹Cr</th><th>P/E</th><th>P/B</th><th>ROCE %</th><th>ROE %</th><th>OPM %</th><th>D/E</th><th>Div yield %</th></tr></thead>`;
+  const self={ratios:R,price:(q&&q.price)??(Y&&Y.price),changePct:(q&&q.changePct)??(Y&&Y.changePct)};
+  if(!names.length){$('peer-table').innerHTML=head+`<tbody><tr class="self"><td class="name">${escH(live.name)}</td>${peerCells(self)}</tr><tr><td colspan="11">${P?'No peers listed for this company.':'Peer list not available right now.'}</td></tr></tbody>`;return}
+  $('peer-table').innerHTML=head+`<tbody><tr class="self"><td class="name">${escH(live.name)}</td>${peerCells(self)}</tr>`+
+    names.map((n,i)=>`<tr data-row="${i}"><td class="name"><a href="#top" data-peer="${escH(n)}" title="Open this company">${escH(n)}</a></td>${PEER_COLS.map(()=>`<td>${SPIN}</td>`).join('')}</tr>`).join('')+
+    `<tr class="median" id="peer-median"><td>Peer median</td><td colspan="10" class="mono">${SPIN} loading peers…</td></tr></tbody>`;
+  loadPeers(names,R,Y,++peerSeq);
+}
+
+// Fetch peers two at a time; show each row as soon as it arrives.
+async function loadPeers(names,R,Y,my){
+  const got=new Array(names.length).fill(null);
+  const one=async i=>{
+    const name=names[i], key=norm(name).split(' ').slice(0,2).join(' '), sure=h=>h&&norm(h.n).startsWith(key);
+    let hit=localSearch(name).find(sure); if(!hit){const r=await remoteSearch(name);hit=r.find(sure)||null}
+    if(my!==peerSeq)return;
+    const row=document.querySelector(`#peer-table tr[data-row="${i}"]`); if(!row)return;
+    if(!hit){row.querySelectorAll('td:not(.name)').forEach((td,j)=>td.innerHTML=j===0?'<span class="nm">not listed on NSE/BSE</span>':'');return}
+    const ex=hit.nse===false&&hit.bse?'BSE':'NSE';
+    let r=null; try{r=await getJSON(`/api/peer?symbol=${encodeURIComponent(hit.s)}&ex=${ex}`,`peer2:${ex}:${hit.s}`,360,v=>v.ok&&!v.partial)}catch(e){}
+    if(my!==peerSeq)return;
+    const a=row.querySelector('a'); a.dataset.sym=hit.s; a.dataset.ex=ex;
+    if(r&&r.ok){got[i]=r.data; row.innerHTML=row.querySelector('.name').outerHTML+peerCells(r.data)}
+    else row.querySelectorAll('td:not(.name)').forEach((td,j)=>td.innerHTML=j===0?'<span class="nm">no data</span>':'-');
+  };
+  let next=0; const worker=async()=>{while(next<names.length&&my===peerSeq)await one(next++)};
+  await Promise.all([worker(),worker()]);
+  if(my!==peerSeq)return;
+  const P=got.filter(Boolean), col=k=>P.map(p=>p.ratios&&p.ratios[k]);
+  const med={pe:median(col('pe').filter(v=>v!=null&&v>0)),pb:median(col('pb')),dy:median(col('dy')),roce:median(col('roce')),roe:median(col('roe')),roa:median(col('roa')),de:median(col('de')),opm:median(col('opm')),mcap:median(col('mcap'))};
+  $('peer-median').innerHTML=P.length?`<td>Peer median</td><td>-</td><td>-</td><td>${nf(med.mcap,0)}</td><td>${nf(med.pe)}</td><td>${nf(med.pb)}</td><td>${nf(med.roce)}</td><td>${nf(med.roe)}</td><td>${nf(med.opm)}</td><td>${nf(med.de,2)}</td><td>${nf(med.dy,2)}</td>`:'<td colspan="11">No peer figures available.</td>';
+  renderTiles(R,P.length?med:null,false);
+  renderChecks(R,P.length?med:null,Y);
 }
 
 // Results table (sample)
@@ -754,7 +825,8 @@ async function openPeer(name){
   const ok=await load(hit.s,hit.nse===false&&hit.bse?'BSE':'NSE',hit.n);
   if(ok)window.scrollTo({top:0,behavior:'smooth'});
 }
-$('peer-table').addEventListener('click',e=>{const a=e.target.closest('[data-peer]');if(a){e.preventDefault();openPeer(a.dataset.peer)}});
+$('peer-table').addEventListener('click',e=>{const a=e.target.closest('[data-peer]');if(!a)return;e.preventDefault();
+  if(a.dataset.sym)load(a.dataset.sym,a.dataset.ex).then(ok=>{if(ok)window.scrollTo({top:0,behavior:'smooth'})});else openPeer(a.dataset.peer)});
 
 // ---------- Footer easter egg: click "Brewed" ----------
 function brewOpen(){
